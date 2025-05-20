@@ -20,7 +20,7 @@
             <h5 class="my-0 mr-md-auto font-weight-normal"><a href="/">📜🤖 Blurb it!</a></h5>
             <h5 class="my-0 mr-md-auto font-weight-normal"><a href="/howto">How do I use Blurb It?</a></h5>
             {% if not username %}
-                <a class="btn btn-outline-primary btn-social btn-github" href="https://github.com/login/oauth/authorize?client_id={{ client_id }}&scope=repo&redirect_uri=https://{{ app_url }}/add_blurb">
+                <a class="btn btn-outline-primary btn-social btn-github" href="https://github.com/login/oauth/authorize?client_id={{ client_id }}&scope=repo&redirect_uri={{ app_protocol }}://{{ app_url }}/add_blurb">
             <span class="fa fa-github"></span>
             Sign in with GitHub
             </a>
@@ -42,7 +42,7 @@
         <footer class="pt-4 my-md-5 pt-md-5 border-top">
             <div class="row">
                 <div class="col-12 col-md text-center">
-                    <small class="d-block mb-3 text-muted">&copy; 2018 <a href="https://www.python.org/psf-landing/">Python Software Foundation</a> | <a href="https://github.com/python/blurb_it">View source</a> | <a href="https://github.com/python/blurb_it/issues/new">Report an issue</a></small>
+                    <small class="d-block mb-3 text-muted">&copy; 2018-2025 <a href="https://www.python.org/psf-landing/">Python Software Foundation</a> | <a href="https://github.com/python/blurb_it">View source</a> | <a href="https://github.com/python/blurb_it/issues/new">Report an issue</a></small>
                 </div>
             </div>
         </footer>

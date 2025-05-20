@@ -13,7 +13,6 @@
                     <h3>📜🤖 Blurb it again?</h3>
                 {% endif %}
             {% endif %}
-
             <form action="/add_blurb" method="post" accept-charset="utf-8" enctype="application/x-www-form-urlencoded">
                 <input type="hidden" name="csrf" value="{{ csrf }}">
                 <div class="mb-3">
@@ -27,6 +26,19 @@
                 <div class="mb-3">
                     <div class="col form-inline">
                         <label for="pr_number" class="form-inline">GH Pull Request #</label><input type="text" class="form-control form-inline" placeholder="12345" id="pr_number" name="pr_number" required>
+                        <div class="btn-group dropright form-inline">
+                            <button type="button" class="btn btn-secondary">
+                                Load Info
+                            </button>
+                            <button type="button" class="btn btn-secondary dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                <span class="sr-only">Recent PRs Dropright</span>
+                                Recent
+                            </button>
+                            <div class="dropdown-menu">
+                                <a class="dropdown-item" href="#">gh-120754: Open abc123</a>
+                                <a class="dropdown-item" href="#">gh-120754: Open abc123</a>
+                            </div>
+                        </div>
                     </div>
                     <div class="col form-inline">
                         <small id="gh-help" class="form-text text-muted">The CPython GitHub pull request number.</small>

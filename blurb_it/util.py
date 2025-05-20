@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import os
 import time
 import secrets
 
@@ -21,6 +22,13 @@ async def nonceify(body):
     digest = hashlib.md5(body.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(digest)[0:6].decode("ascii")
 
+
+def get_app_context():
+    context = {}
+    context["client_id"] = os.environ.get("GH_CLIENT_ID")
+    context["app_url"] = os.environ.get("APP_URL")
+    context["app_protocol"] = os.environ.get("APP_PROTOCOL", "https")
+    return context
 
 async def get_session_context(request, context=None):
     context = context or {}

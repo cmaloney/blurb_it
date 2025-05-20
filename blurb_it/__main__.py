@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import base64
 import os
+import sys
+from pathlib import Path
 
 import aiohttp
 import aiohttp_jinja2
@@ -31,9 +34,7 @@ async def handle_get(request: Request) -> Response:
     # data = request.query_string
     # data2 = await request.rel_url.query['']
     request_session = await get_session(request)
-    context = {}
-    context["client_id"] = os.environ.get("GH_CLIENT_ID")
-    context["app_url"] = os.environ.get("APP_URL")
+    context = util.get_app_context()
     if request_session.get("username") and request_session.get("token"):
         context["username"] = request_session["username"]
         location = request.app.router["add_blurb"].url_for()
@@ -48,9 +49,7 @@ async def handle_get(request: Request) -> Response:
 @routes.get("/howto", name="howto")
 async def handle_howto_get(request: Request) -> Response:
     """Render a page explaining how to use blurb_it"""
-    context = {}
-    context["client_id"] = os.environ.get("GH_CLIENT_ID")
-    context["app_url"] = os.environ.get("APP_URL")
+    context = util.get_app_context()
     response = aiohttp_jinja2.render_template("howto.html", request, context=context)
     return response
 
@@ -60,9 +59,7 @@ async def handle_install(request: Request) -> Response:
     """Render a page, ask user to install blurb_it"""
     # data = request.query_string
     # data2 = await request.rel_url.query['']
-    context = {}
-    context["client_id"] = os.environ.get("GH_CLIENT_ID")
-    context["app_url"] = os.environ.get("APP_URL")
+    context = util.get_app_context()
     if await util.has_session(request):
         context.update(await util.get_session_context(request, context))
 
@@ -91,6 +88,15 @@ async def handle_add_blurb_get(request: Request) -> Response:
             except error.InstallationNotFound:
                 return web.HTTPFound(location=request.app.router["install"].url_for())
 
+            if pr_number_start := request.query.get("pr_number_start"):
+                context['current_pr'] = await gh.getitem(
+                    f"/repos/python/cpython/pulls/{pr_number_start}",
+                    jwt=jwt,
+                    accept="application/vnd.github+json"
+                )
+                # have a gh and a jwt....
+                print(f"TODO: Get PR info|{context['current_pr']=}")
+
     elif token is not None:
 
         async with aiohttp.ClientSession() as session:
@@ -105,6 +111,7 @@ async def handle_add_blurb_get(request: Request) -> Response:
                 response_text = await response.text()
                 access_token = get_access_token(response_text)
                 gh = GitHubAPI(session, "blurb-it", oauth_token=access_token)
+
                 response = await gh.getitem("/user")
                 login_name = response["login"]
                 request_session["username"] = login_name
@@ -124,8 +131,19 @@ async def handle_add_blurb_get(request: Request) -> Response:
                         location=request.app.router["install"].url_for()
                     )
 
+                if pr_number_start := request.query.get("pr_number_start"):
+                    context['current_pr'] = await gh.getitem(
+                        f"/repos/python/cpython/pulls/{pr_number_start}",
+                        jwt=jwt,
+                        accept="application/vnd.github+json"
+                    )
+                    # have a gh and a jwt....
+                    print(f"TODO: Get PR info|{context['current_pr']=}")
+
     else:
         return web.HTTPFound(location=request.app.router["home"].url_for())
+
+    print("TODO: Get general user pr list")
 
     response = aiohttp_jinja2.render_template(
         "add_blurb.html", request, context=context
@@ -227,8 +245,7 @@ async def handle_add_blurb_post(request: Request) -> Response:
     else:
         return web.HTTPFound(location=request.app.router["add_blurb"].url_for())
 
-
-if __name__ == "__main__":  # pragma: no cover
+def do_run_env_vars():
     fernet_key = fernet.Fernet.generate_key()
     secret_key = base64.urlsafe_b64decode(fernet_key)
 
@@ -249,3 +266,70 @@ if __name__ == "__main__":  # pragma: no cover
     app.router.add_routes(routes)
     app.add_routes([web.static("/static", os.path.join(os.getcwd(), "static"))])
     web.run_app(app, port=port)
+
+
+def do_config_from_toml(config_filename):
+    """Load TOML config and set env vars to run."""
+    # TODO: Requires 3.11+
+    import tomllib
+    with open(config_filename, 'rb') as file:
+        config = tomllib.load(file)
+
+    # Turn TOML into environment variables
+    have = set(config.keys())
+    required = {
+        "app_url": "APP_URL",
+        "github_app_id": "GH_APP_ID",
+        "github_private_key_path": None,
+        "github_client_id": "GH_CLIENT_ID",
+        "github_client_secret": "GH_CLIENT_SECRET",
+        "port": "PORT",
+    }
+
+    # Produce a nice error if a config key is mistyped
+    needed_config_keys = set(required.keys())
+    if needed_config_keys != have:
+        missing = needed_config_keys - have
+        extra = have - needed_config_keys
+        print(f"Invalid config|{missing=}|{extra=}")
+        sys.exit(1)
+
+    for k, v in required.items():
+        if v is None:
+            continue
+        os.environ[v] = str(config[k])
+
+    config_key_path = Path(config['github_private_key_path'])
+    if not config_key_path.is_absolute():
+        config_key_path = Path("ENV") / config_key_path
+    private_key = config_key_path.read_text()
+    os.environ['GH_PRIVATE_KEY'] = private_key
+    os.environ["APP_PROTOCOL"] = "http"
+    os.environ["APP_URL"] = f"{config['app_url']}:{config['port']}"
+
+def do_localdev(args):
+    do_config_from_toml(args.config_file)
+    do_run_env_vars()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.set_defaults(action=lambda args: do_run_env_vars)
+    sub = parser.add_subparsers(dest="subcommand", required=False)
+
+    # User friendly local development setup
+    localdev = sub.add_parser("localdev")
+    localdev.add_argument("--config-file", "-c", default="ENV/localdev.toml")
+    localdev.set_defaults(action=do_localdev)
+
+    # TODO: Add `setup` subcommand that will guide through creating Github App
+    # credentials and writing localdev.toml config.
+
+    return parser.parse_args()
+
+def do_main():
+    args = parse_args()
+    args.action(args)
+
+if __name__ == "__main__":  # pragma: no cover
+    do_main()
