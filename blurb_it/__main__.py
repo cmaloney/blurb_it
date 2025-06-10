@@ -84,11 +84,23 @@ async def handle_add_blurb_get(request: Request) -> Response:
                 app_id=os.getenv("GH_APP_ID"), private_key=os.getenv("GH_PRIVATE_KEY")
             )
             try:
-                await util.get_installation(gh, jwt, context["username"])
+                installation = await util.get_installation(gh, jwt, context["username"])
             except error.InstallationNotFound:
                 return web.HTTPFound(location=request.app.router["install"].url_for())
 
             if pr_number_start := request.query.get("pr_number_start"):
+                access_token = await get_installation_access_token(
+                    gh,
+                    installation_id=installation["id"],
+                    app_id=os.getenv("GH_APP_ID"),
+                    private_key=os.getenv("GH_PRIVATE_KEY"),
+                )
+
+                gh = GitHubAPI(
+                    session,
+                    request_session["username"],
+                    oauth_token=access_token["token"],
+                )
                 context['current_pr'] = await gh.getitem(
                     f"/repos/python/cpython/pulls/{pr_number_start}",
                     jwt=jwt,

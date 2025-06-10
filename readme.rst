@@ -68,3 +68,20 @@ Running tests
 2. Activate the virtual environment with ``$ . venv/bin/activate``
 3. Install dev requirements with ``(venv)$ pip install -r dev-requirements.txt``
 4. Run all tests with ``(venv)$ pytest tests``
+
+Running locally
+===============
+
+1. Create a new github app for doing development: https://github.com/settings/apps/new
+    a. Homepage url: Your repo URL (ex. `https://github.com/<username>/blurb_it``)
+    b. TODO: Repo Permissions
+    c.  Where can this GitHub App be installed? -- Only this account
+    d. callback_url: http://127.0.0.1:8080
+    e. setup_url: http://127.0.0.1:8080
+2. On the about page click:
+    a. "Generate a new client secret", copy/past/save locally
+    b. "Generate a client key", move it to ENV folder
+    c. Install the app to your cpython repository
+3. Install the app to your repository
+    a. "Install App" in sidebar -- https://github.com/settings/apps/blurbit-cmaloney-development/installations
+4. python3 -m blurb_it
