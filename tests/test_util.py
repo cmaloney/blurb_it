@@ -17,6 +17,10 @@ class FakeGH:
         self.post_url = []
         self.post_data = []
 
+    async def getitem(self, url, **kwargs):
+        self.getitem_url = url
+        return self._getitem_return
+
     async def getiter(self, url, jwt=None, accept=None):
         self.getiter_url = url
         for item in self._getiter_return:
@@ -208,3 +212,27 @@ async def test_get_installation_not_found():
     with pytest.raises(error.InstallationNotFound) as exc:
         await util.get_installation(gh, "fake_jwt", "octonauts")
     assert exc.value.args[0] == "Can't find installation by that user: octonauts"
+
+
+async def test_get_user_cpython_prs():
+    search_result = {
+        "total_count": 2,
+        "items": [
+            {"number": 12345, "title": "gh-12345: Fix a bug"},
+            {"number": 99999, "title": "No issue: Unrelated change"},
+        ],
+    }
+    gh = FakeGH(getitem=search_result)
+    result = await util.get_user_cpython_prs(gh, "octocat")
+    assert result == [
+        {"number": 12345, "title": "gh-12345: Fix a bug", "issue_number": "12345"},
+        {"number": 99999, "title": "No issue: Unrelated change", "issue_number": None},
+    ]
+    assert "is:pr" in gh.getitem_url
+    assert "author:octocat" in gh.getitem_url
+
+
+async def test_get_user_cpython_prs_empty():
+    gh = FakeGH(getitem={"total_count": 0, "items": []})
+    result = await util.get_user_cpython_prs(gh, "octocat")
+    assert result == []

@@ -100,7 +100,11 @@ async def handle_add_blurb_get(request: Request) -> Response:
                 gh_user = GitHubAPI(
                     session, context["username"], oauth_token=context["token"]
                 )
+                context["user_prs"] = await util.get_user_cpython_prs(
+                    gh_user, context["username"]
+                )
 
+                # user_prs not populated on first login; subsequent visits use has_session branch
                 if pr_number_start:
                     context["current_pr"] = await gh_user.getitem(
                         f"/repos/python/cpython/pulls/{pr_number_start}",
@@ -109,6 +113,12 @@ async def handle_add_blurb_get(request: Request) -> Response:
                     context["pr_issue_number"] = util.parse_issue_number_from_title(
                         context["current_pr"]["title"]
                     )
+                    existing_blurb = await util.get_existing_pr_blurb(
+                        gh_user, pr_number_start
+                    )
+                    if existing_blurb:
+                        context["existing_blurb_section"] = existing_blurb["section"]
+                        context["existing_blurb_content"] = existing_blurb["content"]
 
         elif token is not None:
 
@@ -148,6 +158,12 @@ async def handle_add_blurb_get(request: Request) -> Response:
                         context["pr_issue_number"] = util.parse_issue_number_from_title(
                             context["current_pr"]["title"]
                         )
+                        existing_blurb = await util.get_existing_pr_blurb(
+                            gh, pr_number_start
+                        )
+                        if existing_blurb:
+                            context["existing_blurb_section"] = existing_blurb["section"]
+                            context["existing_blurb_content"] = existing_blurb["content"]
 
         else:
             return web.HTTPFound(location=request.app.router["home"].url_for())

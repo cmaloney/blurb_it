@@ -13,6 +13,9 @@
                     <h3>📜🤖 Blurb it again?</h3>
                 {% endif %}
             {% endif %}
+            {% if current_pr and not existing_blurb_content %}
+                <div class="alert alert-warning" role="alert">No existing blurb found in PR #{{ current_pr.number }}.</div>
+            {% endif %}
 
             <form action="/add_blurb" method="post" accept-charset="utf-8" enctype="application/x-www-form-urlencoded">
                 <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -21,7 +24,22 @@
                         <label for="pr_number" class="form-inline">GH Pull Request #</label>
                         <input type="text" class="form-control form-inline" placeholder="12345" id="pr_number" name="pr_number"
                                value="{{ current_pr.number if current_pr else '' }}" required>
-                        <button type="button" class="btn btn-secondary ml-2" id="load-info-btn">Load Info</button>
+                        <div class="btn-group ml-2">
+                            <button type="button" class="btn btn-secondary" id="load-info-btn">Load Info</button>
+                            {% if user_prs %}
+                            <button type="button" class="btn btn-secondary dropdown-toggle dropdown-toggle-split"
+                                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                <span class="sr-only">Recent PRs</span>
+                            </button>
+                            <div class="dropdown-menu">
+                                {% for pr in user_prs %}
+                                <a class="dropdown-item" href="/add_blurb?pr_number_start={{ pr.number }}">
+                                    {{ pr.title | truncate(60) }}
+                                </a>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
                     <div class="col form-inline">
                         <small id="gh-help" class="form-text text-muted">The CPython GitHub pull request number.</small>
@@ -42,24 +60,24 @@
                         <label for="section" class="form-inline">Choose an option: </label>
                         <select id="section" name="section" class="form-control form-inline" required>
                             <option></option>
-                            <option>Security</option>
-                            <option value="Core_and_Builtins">Core and Builtins</option>
-                            <option>Library</option>
-                            <option>Documentation</option>
-                            <option>Tests</option>
-                            <option>Build</option>
-                            <option>Windows</option>
-                            <option>macOS</option>
-                            <option>IDLE</option>
-                            <option value="Tools-Demos">Tools and Demos</option>
-                            <option value="C_API">C API</option>
+                            <option {% if existing_blurb_section == "Security" %}selected{% endif %}>Security</option>
+                            <option value="Core_and_Builtins" {% if existing_blurb_section == "Core_and_Builtins" %}selected{% endif %}>Core and Builtins</option>
+                            <option {% if existing_blurb_section == "Library" %}selected{% endif %}>Library</option>
+                            <option {% if existing_blurb_section == "Documentation" %}selected{% endif %}>Documentation</option>
+                            <option {% if existing_blurb_section == "Tests" %}selected{% endif %}>Tests</option>
+                            <option {% if existing_blurb_section == "Build" %}selected{% endif %}>Build</option>
+                            <option {% if existing_blurb_section == "Windows" %}selected{% endif %}>Windows</option>
+                            <option {% if existing_blurb_section == "macOS" %}selected{% endif %}>macOS</option>
+                            <option {% if existing_blurb_section == "IDLE" %}selected{% endif %}>IDLE</option>
+                            <option value="Tools-Demos" {% if existing_blurb_section == "Tools-Demos" %}selected{% endif %}>Tools and Demos</option>
+                            <option value="C_API" {% if existing_blurb_section == "C_API" %}selected{% endif %}>C API</option>
                         </select>
                     </div>
                 </div>
                 <div class="mb-3">
                     <textarea class="form-control" id="news_entry" name="news_entry" rows="10" placeholder="Write your Misc/NEWS entry below.
 It should be a simple ReST paragraph.
-Don't start with '- Issue #<n>: ' or '- gh-issue-<n>: ' or that sort of stuff." required></textarea>
+Don't start with '- Issue #<n>: ' or '- gh-issue-<n>: ' or that sort of stuff." required>{{ existing_blurb_content if existing_blurb_content else '' }}</textarea>
                 </div>
                 <button type="submit" class="btn btn-primary mb-2">📜🤖 blurb it!</button>
             </form>

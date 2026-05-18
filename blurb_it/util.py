@@ -64,6 +64,29 @@ def compare_csrf_tokens(token_a, token_b):
     return secrets.compare_digest(token_a, token_b)
 
 
+async def get_existing_pr_blurb(gh, pr_number: str) -> dict | None:
+    """Return {section, content} if the PR contains an existing blurb file, else None."""
+    blurb_pattern = re.compile(r"Misc/NEWS\.d/next/([^/]+)/.*\.rst$")
+    async for file in gh.getiter(
+        f"/repos/python/cpython/pulls/{pr_number}/files",
+        accept="application/vnd.github+json",
+    ):
+        if file["status"] == "removed":
+            continue
+        m = blurb_pattern.match(file["filename"])
+        if m:
+            section = m.group(1)
+            patch = file.get("patch", "")
+            lines = [
+                line[1:]
+                for line in patch.splitlines()
+                if line.startswith("+") and not line.startswith("+++")
+            ]
+            content = "\n".join(lines).strip()
+            return {"section": section, "content": content}
+    return None
+
+
 def parse_issue_number_from_title(title: str) -> str | None:
     """Extract a CPython issue number from a PR title like 'gh-12345: ...'"""
     m = re.search(r'gh-(\d+)', title, re.IGNORECASE)
@@ -73,6 +96,24 @@ def parse_issue_number_from_title(title: str) -> str | None:
     if m:
         return m.group(1)
     return None
+
+
+async def get_user_cpython_prs(gh, username: str, limit: int = 5) -> list[dict]:
+    """Return the most recently updated open CPython PRs authored by username."""
+    query = f"is:pr+is:open+repo:python/cpython+author:{username}"
+    result = await gh.getitem(
+        f"/search/issues?q={query}&sort=updated&per_page={limit}",
+    )
+    prs = []
+    for item in result.get("items", []):
+        prs.append(
+            {
+                "number": item["number"],
+                "title": item["title"],
+                "issue_number": parse_issue_number_from_title(item["title"]),
+            }
+        )
+    return prs
 
 
 async def get_installation(gh, jwt, username):
