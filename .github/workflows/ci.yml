@@ -32,7 +32,7 @@ jobs:
         with:
           cache-dependency-path: |
             .github/workflows/ci.yml
-            dev-requirements.txt
+            pyproject.toml
             requirements.txt
 
       - name: Tox tests

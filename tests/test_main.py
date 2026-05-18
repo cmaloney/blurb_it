@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import base64
 import pathlib
+import ssl
+from unittest import mock
 
+import aiohttp
 import aiohttp_jinja2
 import jinja2
 import pytest
@@ -10,6 +13,7 @@ from aiohttp import web
 from aiohttp_session import setup as setup_session
 from aiohttp_session.cookie_storage import EncryptedCookieStorage
 from cryptography import fernet
+from pydantic import ValidationError
 
 from blurb_it import __main__
 
@@ -28,6 +32,7 @@ def create_app() -> web.Application:
     aiohttp_jinja2.setup(
         app, loader=jinja2.FileSystemLoader(pathlib.Path.cwd() / "templates")
     )
+    app[__main__.SETTINGS] = __main__.Settings()
     return app
 
 
@@ -77,6 +82,80 @@ async def test_handle_install(aiohttp_client) -> None:
     text = await resp.text()
     assert "<title>📜🤖 Blurb It!</title>" in text
     assert "Please install" in text
+
+
+async def test_certificate_error_shows_fix_instructions(aiohttp_client) -> None:
+    # Arrange
+    async def handler(request: web.Request) -> web.Response:
+        raise aiohttp.ClientConnectorCertificateError(
+            mock.Mock(), ssl.SSLCertVerificationError("certificate verify failed")
+        )
+
+    app = create_app()
+    app.router.add_get("/", handler)
+    client = await aiohttp_client(app)
+
+    # Act
+    resp = await client.get("/")
+
+    # Assert
+    text = await resp.text()
+    assert "Install Certificates.command" in text
+
+
+def test_localdev_settings_reads_env_file_and_secrets(tmp_path, monkeypatch) -> None:
+    # Arrange
+    monkeypatch.chdir(tmp_path)
+    for name in ("GH_APP_ID", "GH_PRIVATE_KEY", "APP_PROTOCOL", "PORT"):
+        monkeypatch.delenv(name, raising=False)
+    (tmp_path / "ENV" / "secrets").mkdir(parents=True)
+    (tmp_path / "ENV" / "localdev.env").write_text(
+        "GH_APP_ID=12345\nAPP_PROTOCOL=http\nPORT=8080\n"
+    )
+    (tmp_path / "ENV" / "secrets" / "gh_private_key").write_text("PEM DATA\n")
+    monkeypatch.setenv("PORT", "9000")
+
+    # Act
+    settings = __main__._localdev_settings()
+
+    # Assert
+    assert settings.gh_app_id == "12345"
+    assert settings.app_protocol == "http"
+    assert settings.gh_private_key == "PEM DATA"
+    assert settings.port == 9000  # environment variables override the file
+
+
+def test_localdev_settings_rejects_unknown_keys(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "ENV" / "secrets").mkdir(parents=True)
+    (tmp_path / "ENV" / "localdev.env").write_text("GH_APP_IDD=typo\n")
+
+    with pytest.raises(ValidationError, match="gh_app_idd"):
+        __main__._localdev_settings()
+
+
+def test_localdev_settings_requires_env_file(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit, match="ENV/localdev.env not found"):
+        __main__._localdev_settings()
+
+
+def test_settings_app_context() -> None:
+    settings = __main__.Settings(
+        gh_client_id="test_client_id", app_url="localhost:8080", app_protocol="http"
+    )
+    assert settings.app_context() == {
+        "client_id": "test_client_id",
+        "app_base_url": "http://localhost:8080",
+    }
+
+
+def test_settings_app_context_defaults_to_https(monkeypatch) -> None:
+    monkeypatch.setenv("APP_URL", "example.com")
+    monkeypatch.delenv("APP_PROTOCOL", raising=False)
+    ctx = __main__.Settings().app_context()
+    assert ctx["app_base_url"] == "https://example.com"
 
 
 @pytest.mark.parametrize(

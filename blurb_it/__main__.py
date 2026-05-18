@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import base64
 import os
+import sys
+from pathlib import Path
 
 import aiohttp
 import aiohttp_jinja2
@@ -16,13 +19,45 @@ from aiohttp_session.cookie_storage import EncryptedCookieStorage
 from cryptography import fernet
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token, get_jwt
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from blurb_it import error, middleware, util
 
 routes = web.RouteTableDef()
 
 
-sentry_sdk.init(os.environ.get("SENTRY_DSN"))
+class Settings(BaseSettings):
+    """App configuration, read from environment variables (e.g. ``GH_APP_ID``)."""
+
+    model_config = SettingsConfigDict(extra="forbid", frozen=True)
+
+    gh_app_id: str | None = None
+    gh_private_key: str | None = None
+    gh_client_id: str | None = None
+    gh_client_secret: str | None = None
+    app_url: str = ""
+    app_protocol: str = "https"
+    session_secret: str | None = None
+    port: int | None = None
+    sentry_dsn: str | None = None
+
+    def app_context(self) -> dict:
+        """Template context needed by every page (e.g. the sign-in link)."""
+        return {
+            "client_id": self.gh_client_id,
+            "app_base_url": f"{self.app_protocol}://{self.app_url}",
+        }
+
+
+SETTINGS = web.AppKey("settings", Settings)
+
+
+def get_settings(request: Request) -> Settings:
+    return request.app[SETTINGS]
+
+
+def _make_jwt(settings: Settings) -> str:
+    return get_jwt(app_id=settings.gh_app_id, private_key=settings.gh_private_key)
 
 
 @routes.get("/", name="home")
@@ -31,7 +66,7 @@ async def handle_get(request: Request) -> Response:
     # data = request.query_string
     # data2 = await request.rel_url.query['']
     request_session = await get_session(request)
-    context = util.get_app_context()
+    context = get_settings(request).app_context()
     if request_session.get("username") and request_session.get("token"):
         context["username"] = request_session["username"]
         location = request.app.router["add_blurb"].url_for()
@@ -46,7 +81,7 @@ async def handle_get(request: Request) -> Response:
 @routes.get("/howto", name="howto")
 async def handle_howto_get(request: Request) -> Response:
     """Render a page explaining how to use blurb_it"""
-    context = util.get_app_context()
+    context = get_settings(request).app_context()
     response = aiohttp_jinja2.render_template("howto.html", request, context=context)
     return response
 
@@ -56,7 +91,7 @@ async def handle_install(request: Request) -> Response:
     """Render a page, ask user to install blurb_it"""
     # data = request.query_string
     # data2 = await request.rel_url.query['']
-    context = util.get_app_context()
+    context = get_settings(request).app_context()
     if await util.has_session(request):
         context.update(await util.get_session_context(request, context))
 
@@ -67,6 +102,7 @@ async def handle_install(request: Request) -> Response:
 @routes.get("/add_blurb", name="add_blurb")
 async def handle_add_blurb_get(request: Request) -> Response:
     """Render a page with a textbox and submit button."""
+    settings = get_settings(request)
     token = request.rel_url.query.get("code")
     request_session = await get_session(request)
     context = {"csrf": util.get_csrf_token(session=request_session)}
@@ -77,9 +113,7 @@ async def handle_add_blurb_get(request: Request) -> Response:
 
             gh = GitHubAPI(session, context["username"])
 
-            jwt = get_jwt(
-                app_id=os.getenv("GH_APP_ID"), private_key=os.getenv("GH_PRIVATE_KEY")
-            )
+            jwt = _make_jwt(settings)
             try:
                 await util.get_installation(gh, jwt, context["username"])
             except error.InstallationNotFound:
@@ -89,8 +123,8 @@ async def handle_add_blurb_get(request: Request) -> Response:
 
         async with aiohttp.ClientSession() as session:
             payload = {
-                "client_id": os.environ.get("GH_CLIENT_ID"),
-                "client_secret": os.environ.get("GH_CLIENT_SECRET"),
+                "client_id": settings.gh_client_id,
+                "client_secret": settings.gh_client_secret,
                 "code": token,
             }
             async with session.post(
@@ -107,10 +141,7 @@ async def handle_add_blurb_get(request: Request) -> Response:
 
                 gh = GitHubAPI(session, context["username"])
 
-                jwt = get_jwt(
-                    app_id=os.getenv("GH_APP_ID"),
-                    private_key=os.getenv("GH_PRIVATE_KEY"),
-                )
+                jwt = _make_jwt(settings)
                 try:
                     await util.get_installation(gh, jwt, context["username"])
                 except error.InstallationNotFound:
@@ -137,6 +168,7 @@ def get_access_token(token_str: str) -> str | None:
 
 @routes.post("/add_blurb")
 async def handle_add_blurb_post(request: Request) -> Response:
+    settings = get_settings(request)
     if await util.has_session(request):
         session_context = await util.get_session_context(request)
         request_session = await get_session(request)
@@ -160,9 +192,7 @@ async def handle_add_blurb_post(request: Request) -> Response:
         async with aiohttp.ClientSession() as session:
             gh = GitHubAPI(session, session_context["username"])
 
-            jwt = get_jwt(
-                app_id=os.getenv("GH_APP_ID"), private_key=os.getenv("GH_PRIVATE_KEY")
-            )
+            jwt = _make_jwt(settings)
             try:
                 installation = await util.get_installation(
                     gh, jwt, session_context["username"]
@@ -173,8 +203,8 @@ async def handle_add_blurb_post(request: Request) -> Response:
                 access_token = await get_installation_access_token(
                     gh,
                     installation_id=installation["id"],
-                    app_id=os.getenv("GH_APP_ID"),
-                    private_key=os.getenv("GH_PRIVATE_KEY"),
+                    app_id=settings.gh_app_id,
+                    private_key=settings.gh_private_key,
                 )
 
                 gh = GitHubAPI(
@@ -222,9 +252,14 @@ async def handle_add_blurb_post(request: Request) -> Response:
         return web.HTTPFound(location=request.app.router["add_blurb"].url_for())
 
 
-if __name__ == "__main__":  # pragma: no cover
-    fernet_key = fernet.Fernet.generate_key()
-    secret_key = base64.urlsafe_b64decode(fernet_key)
+def _build_app(settings: Settings) -> web.Application:
+    sentry_sdk.init(settings.sentry_dsn)
+
+    session_secret = settings.session_secret
+    if session_secret:
+        secret_key = base64.urlsafe_b64decode(session_secret.encode())
+    else:
+        secret_key = base64.urlsafe_b64decode(fernet.Fernet.generate_key())
 
     app = web.Application(
         middlewares=[
@@ -232,14 +267,43 @@ if __name__ == "__main__":  # pragma: no cover
             session_middleware(EncryptedCookieStorage(secret_key)),
         ]
     )
-
     aiohttp_jinja2.setup(
         app, loader=jinja2.FileSystemLoader(os.path.join(os.getcwd(), "templates"))
     )
+    app[SETTINGS] = settings
     app["static_root_url"] = os.path.join(os.getcwd(), "static")
-    port = os.environ.get("PORT")
-    if port is not None:
-        port = int(port)
     app.router.add_routes(routes)
     app.add_routes([web.static("/static", os.path.join(os.getcwd(), "static"))])
-    web.run_app(app, port=port)
+    return app
+
+
+LOCALDEV_ENV_FILE = Path("ENV/localdev.env")
+LOCALDEV_SECRETS_DIR = Path("ENV/secrets")
+
+
+def _localdev_settings() -> Settings:
+    if not LOCALDEV_ENV_FILE.is_file():
+        sys.exit(f"{LOCALDEV_ENV_FILE} not found; see 'Running locally' in readme.rst.")
+    return Settings(_env_file=LOCALDEV_ENV_FILE, _secrets_dir=LOCALDEV_SECRETS_DIR)
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="blurb_it web app")
+    parser.set_defaults(load_settings=Settings)
+    sub = parser.add_subparsers()
+
+    localdev = sub.add_parser(
+        "localdev", help=f"Run with {LOCALDEV_ENV_FILE} config for local development"
+    )
+    localdev.set_defaults(load_settings=_localdev_settings)
+
+    return parser.parse_args()
+
+
+def main() -> None:  # pragma: no cover
+    settings = _parse_args().load_settings()
+    web.run_app(_build_app(settings), port=settings.port)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()

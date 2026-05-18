@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blurb-it"
+version = "0"
+description = "Add a news blurb to a CPython pull request"
+readme = "readme.rst"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+# Runtime dependencies stay pinned in requirements.txt, which deployments
+# install directly.
+dynamic = ["dependencies"]
+
+[tool.setuptools]
+packages = ["blurb_it"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[dependency-groups]
+dev = [
+    "coverage==7.16.1",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "pytest-aiohttp==1.1.1",
+    "pytest-mock==3.15.1",
+    "pytest-cov==7.1.0",
+]
