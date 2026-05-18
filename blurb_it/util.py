@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import os
+import re
 import time
 import secrets
 
@@ -61,6 +62,17 @@ def create_csrf_token():
 
 def compare_csrf_tokens(token_a, token_b):
     return secrets.compare_digest(token_a, token_b)
+
+
+def parse_issue_number_from_title(title: str) -> str | None:
+    """Extract a CPython issue number from a PR title like 'gh-12345: ...'"""
+    m = re.search(r'gh-(\d+)', title, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    m = re.search(r'bpo-(\d+)', title, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    return None
 
 
 async def get_installation(gh, jwt, username):

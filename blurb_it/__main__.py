@@ -80,6 +80,10 @@ async def handle_add_blurb_get(request: Request) -> Response:
     request_session = await get_session(request)
     context = {"csrf": util.get_csrf_token(session=request_session)}
 
+    pr_number_start = request.rel_url.query.get("pr_number_start")
+    if pr_number_start is not None and not pr_number_start.isdigit():
+        pr_number_start = None
+
     try:
         if await util.has_session(request):
             context.update(await util.get_session_context(request, context))
@@ -92,6 +96,19 @@ async def handle_add_blurb_get(request: Request) -> Response:
                     await util.get_installation(gh, jwt, context["username"])
                 except error.InstallationNotFound:
                     return web.HTTPFound(location=request.app.router["install"].url_for())
+
+                gh_user = GitHubAPI(
+                    session, context["username"], oauth_token=context["token"]
+                )
+
+                if pr_number_start:
+                    context["current_pr"] = await gh_user.getitem(
+                        f"/repos/python/cpython/pulls/{pr_number_start}",
+                        accept="application/vnd.github+json",
+                    )
+                    context["pr_issue_number"] = util.parse_issue_number_from_title(
+                        context["current_pr"]["title"]
+                    )
 
         elif token is not None:
 
@@ -113,7 +130,7 @@ async def handle_add_blurb_get(request: Request) -> Response:
                     request_session["token"] = access_token
                     context["username"] = request_session["username"]
 
-                    gh = GitHubAPI(session, context["username"])
+                    gh = GitHubAPI(session, context["username"], oauth_token=access_token)
 
                     jwt = _make_jwt()
                     try:
@@ -121,6 +138,15 @@ async def handle_add_blurb_get(request: Request) -> Response:
                     except error.InstallationNotFound:
                         return web.HTTPFound(
                             location=request.app.router["install"].url_for()
+                        )
+
+                    if pr_number_start:
+                        context["current_pr"] = await gh.getitem(
+                            f"/repos/python/cpython/pulls/{pr_number_start}",
+                            accept="application/vnd.github+json",
+                        )
+                        context["pr_issue_number"] = util.parse_issue_number_from_title(
+                            context["current_pr"]["title"]
                         )
 
         else:

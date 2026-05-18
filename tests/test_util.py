@@ -41,6 +41,21 @@ def test_get_app_context_defaults_to_https(monkeypatch):
     assert ctx["app_base_url"] == "https://example.com"
 
 
+@pytest.mark.parametrize(
+    "title, expected",
+    [
+        ("gh-12345: Fix something in CPython", "12345"),
+        ("GH-99999: Another fix", "99999"),
+        ("bpo-12345: Old style issue", "12345"),
+        ("BPO-99: Old caps style", "99"),
+        ("No issue number here", None),
+        ("", None),
+    ],
+)
+def test_parse_issue_number_from_title(title, expected):
+    assert util.parse_issue_number_from_title(title) == expected
+
+
 async def test_nonceify():
     body = (
         "Lorem ipsum dolor amet flannel squid normcore tbh raclette enim"

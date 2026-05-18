@@ -18,18 +18,23 @@
                 <input type="hidden" name="csrf" value="{{ csrf }}">
                 <div class="mb-3">
                     <div class="col form-inline">
-                        <label for="issue_number" class="form-inline">GH Issue #</label><input type="text" class="form-control form-inline" placeholder="12345" id="issue_number" name="issue_number" required>
+                        <label for="pr_number" class="form-inline">GH Pull Request #</label>
+                        <input type="text" class="form-control form-inline" placeholder="12345" id="pr_number" name="pr_number"
+                               value="{{ current_pr.number if current_pr else '' }}" required>
+                        <button type="button" class="btn btn-secondary ml-2" id="load-info-btn">Load Info</button>
                     </div>
                     <div class="col form-inline">
-                        <small id="issue_number-help" class="form-text text-muted">The CPython GitHub issue number.</small>
+                        <small id="gh-help" class="form-text text-muted">The CPython GitHub pull request number.</small>
                     </div>
                 </div>
                 <div class="mb-3">
                     <div class="col form-inline">
-                        <label for="pr_number" class="form-inline">GH Pull Request #</label><input type="text" class="form-control form-inline" placeholder="12345" id="pr_number" name="pr_number" required>
+                        <label for="issue_number" class="form-inline">GH Issue #</label>
+                        <input type="text" class="form-control form-inline" placeholder="12345" id="issue_number" name="issue_number"
+                               value="{{ pr_issue_number if pr_issue_number else '' }}" required>
                     </div>
                     <div class="col form-inline">
-                        <small id="gh-help" class="form-text text-muted">The CPython GitHub pull request number.</small>
+                        <small id="issue_number-help" class="form-text text-muted">The CPython GitHub issue number.</small>
                     </div>
                 </div>
                 <div class="mb-3">
@@ -62,4 +67,15 @@ Don't start with '- Issue #<n>: ' or '- gh-issue-<n>: ' or that sort of stuff." 
         <div class="col-md-12">Alternatively, you can use <a href="https://devguide.python.org/committing/#what-s-new-and-news-entries">blurb on the command line</a>.</div>
     </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('load-info-btn').addEventListener('click', function () {
+    const prNumber = document.getElementById('pr_number').value.trim();
+    if (prNumber) {
+        window.location.href = '/add_blurb?pr_number_start=' + encodeURIComponent(prNumber);
+    }
+});
+</script>
 {% endblock %}
