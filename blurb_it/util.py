@@ -24,10 +24,11 @@ async def nonceify(body):
 
 
 def get_app_context() -> dict:
+    protocol = os.environ.get("APP_PROTOCOL", "https")
+    host = os.environ.get("APP_URL", "")
     return {
         "client_id": os.environ.get("GH_CLIENT_ID"),
-        "app_url": os.environ.get("APP_URL"),
-        "app_protocol": os.environ.get("APP_PROTOCOL", "https"),
+        "app_base_url": f"{protocol}://{host}",
     }
 
 

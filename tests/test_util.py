@@ -30,15 +30,15 @@ def test_get_app_context(monkeypatch):
     ctx = util.get_app_context()
     assert ctx == {
         "client_id": "test_client_id",
-        "app_url": "localhost:8080",
-        "app_protocol": "http",
+        "app_base_url": "http://localhost:8080",
     }
 
 
 def test_get_app_context_defaults_to_https(monkeypatch):
+    monkeypatch.setenv("APP_URL", "example.com")
     monkeypatch.delenv("APP_PROTOCOL", raising=False)
     ctx = util.get_app_context()
-    assert ctx["app_protocol"] == "https"
+    assert ctx["app_base_url"] == "https://example.com"
 
 
 async def test_nonceify():
